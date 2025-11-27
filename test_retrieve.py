@@ -23,28 +23,20 @@ def test_retrieve():
         return
 
     print(f"✅ Found Knowledge Base ID: {kb_id}")
-    
-    print(f"Type of retrieve: {type(retrieve)}")
-    print(f"Dir of retrieve: {dir(retrieve)}")
+
 
     # If it is a module, try to find a callable inside it
     if hasattr(retrieve, 'retrieve'):
             
-        try:
-            test_agent = Agent(
+        test_agent = Agent(
                 model="us.amazon.nova-lite-v1:0",
                 system_prompt="오토데스크에 관한 정보를 retrieve 툴을 사용하여 찾아주세요",
                 tools=[retrieve]
             )
-            try:
-                response = test_agent("오토데스크에 대한 정보를 찾아주세요")
-                print("\n📄 Result:")
-                print(response)
-            except Exception as e:
-                print(f"Error calling retrieve: {e}")
-        finally:
-            test_agent.close()
-            
+        response = test_agent("오토데스크에 대한 정보를 찾아주세요")
+        print("\n📄 Result:")
+        print(response)
+
     elif callable(retrieve):
         print("retrieve object is callable. Trying to call it.")
         test_agent = Agent(
@@ -52,12 +44,9 @@ def test_retrieve():
             system_prompt="오토데스크에 관한 정보를 retrieve 툴을 사용하여 찾아주세요",
             tools=[retrieve]
         )
-        try:
-            result = test_agent("오토데스크에 대한 정보를 찾아주세요")
-            print("\n📄 Result:")
-            print(result)
-        except Exception as e:
-            print(f"Error calling retrieve: {e}")
+        result = test_agent("오토데스크에 대한 정보를 찾아주세요")
+        print("\n📄 Result:")
+        print(result)
     else:
         print("retrieve is not callable and does not have a 'retrieve' attribute.")
 
