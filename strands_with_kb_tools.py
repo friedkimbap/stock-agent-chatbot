@@ -3,25 +3,35 @@ from strands_tools import retrieve
 import sys
 import os
 import io
+from dotenv import load_dotenv
 # Tavily API(strands와 잘 어울리는 크롤링 API)
 from tavily import TavilyClient
 
 STOCK_AGENT_PROMPT = """당신은 전문 주식 투자 어드바이저입니다. 주식 시장 분석, 기업 정보, 투자 전략에 대한 질문에 답변해주세요.
 
-질문에 답변하기 위해 다음 순서로 도구를 사용하세요:
+**필수 규칙 - 반드시 따라야 합니다!**
 
-1. **retrieve 도구를 우선적으로 사용하세요**: Knowledge Base에 저장된 주식 투자 자료, 기업 분석 리포트, 투자 전략 문서를 검색할 때는 반드시 retrieve 도구를 사용하세요. 질문과 관련된 투자 정보를 찾기 위해 retrieve 도구를 먼저 호출하세요.
+**STEP 1: 모든 질문에 대해 무조건 retrieve 도구를 먼저 호출하세요!**
+- 어떤 질문이든 상관없이 retrieve 도구를 가장 먼저 사용해야 합니다.
+- retrieve 도구로 Knowledge Base를 검색하지 않고 답변하는 것은 절대 금지입니다.
+- 기업명, 주식, 투자 관련 키워드가 있으면 반드시 retrieve로 검색하세요.
 
-2. **인터넷 검색 (Tavily)**: Knowledge Base에서 정보를 찾을 수 없거나 최신 시장 동향, 실시간 뉴스가 필요할 때는 `tavily_search` 도구를 사용하세요. 주가 변동, 기업 공시, 시장 뉴스 등 최신 정보를 검색합니다.
+**STEP 2: retrieve 결과 확인**
+- retrieve에서 관련 정보를 찾았다면, 그 정보를 기반으로 답변하세요.
+- retrieve에서 정보를 찾지 못했거나 최신 정보가 필요한 경우에만 tavily_search를 사용하세요.
+- https://securities.miraeasset.com/bbs/board/message/list.do?categoryId=1521 사이트에서 우선적으로 크롤링해오세요
 
-3. **기업 정보 조회**: 특정 기업에 대한 상세 정보가 필요할 때는 `get_stock_info` 도구를 사용하세요.
+**STEP 3: 추가 정보가 필요한 경우**
+- 최신 뉴스, 실시간 주가가 필요하면 tavily_search를 사용하세요.
+- 한국 주식이 아닌 경우 영어로 검색하세요.
 
-중요 사항:
-- 투자 관련 질문이 있을 때는 항상 먼저 retrieve 도구를 사용하여 Knowledge Base에서 관련 자료를 검색하세요.
-- 답변 시 투자는 본인의 판단과 책임 하에 이루어져야 함을 명시하세요.
-- 구체적인 매수/매도 추천보다는 분석과 정보 제공에 집중하세요.
-- 투자에 문외한인 사람이 이해하기 쉽도록 말해주세요.
-- 만약 Tavily를 사용할 경우에 한국 주식이 아니면 영어로 검색을 해서 정보를 가져오세요
+**절대 규칙:**
+- 스스로 판단하거나 추측하지 마세요
+- 도구를 사용하지 않고 일반적인 정보만 제공하지 마세요
+- 항상 retrieve → (필요시) tavily_search 순서로 진행하세요
+- 답변은 무조건 한국어로 하세요
+- 투자 초보자도 이해할 수 있게 쉽게 설명하세요
+- 답변 마지막에 "투자는 본인의 판단과 책임 하에 이루어져야 합니다" 문구를 포함하세요
 """
 
 
@@ -30,8 +40,6 @@ def tavily_search(query: str) -> str:
     """Tavily API를 사용하여 웹에서 주식 및 투자 관련 정보를 검색합니다.
 
     최신 주식 뉴스, 시장 동향, 기업 공시, 경제 뉴스 등을 검색할 때 유용합니다.
-
-    https://www.kbsec.com/go.able?linkcd=m04010009와 같은 링크에서 클로링하는 것이 좋을 것 같습니다.
     
     Args:
         query: 검색할 키워드나 질문 (예: "삼성전자 최근 뉴스", "반도체 시장 전망")
@@ -95,17 +103,26 @@ def safe_input(prompt: str) -> str:
 
 def main():
     """Main function to run the stock investment advisor agent as a script."""
-
-    kb_id = os.environ.get("KNOWLEDGE_BASE_ID", "YOUR_KNOWLEDGE_BASE_ID")
-    os.environ["KNOWLEDGE_BASE_ID"] = kb_id
     
-    # Tavily API Key 설정
-    os.environ["TAVILY_API_KEY"] = "YOUR_TAVILY_API_KEY"
+    # .env 파일에서 환경 변수 로드
+    load_dotenv()
+    
+    # Knowledge Base ID와 Tavily API Key 확인
+    kb_id = os.environ.get("KNOWLEDGE_BASE_ID")
+    tavily_key = os.environ.get("TAVILY_API_KEY")
+    
+    if not kb_id:
+        print("⚠️ 경고: KNOWLEDGE_BASE_ID가 .env 파일에 설정되지 않았습니다.")
+        print("Knowledge Base 검색 기능이 작동하지 않을 수 있습니다.\n")
+    
+    if not tavily_key:
+        print("⚠️ 경고: TAVILY_API_KEY가 .env 파일에 설정되지 않았습니다.")
+        print("인터넷 검색 기능이 작동하지 않을 수 있습니다.\n")
     
     stock_agent = Agent(
         model="us.amazon.nova-lite-v1:0",
         system_prompt=STOCK_AGENT_PROMPT,
-        tools=[get_stock_info, retrieve, tavily_search]
+        tools=[retrieve, tavily_search, get_stock_info]
     )
     
     # Command line argument이 있으면 한 번만 실행하고 종료
